@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <style type="text/css">
+        .root{
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #8f831a;
+        }
+    
+        .label{
+            display: inline-block;
+            padding: 0 15px;
+            width: 150px;
+            text-align: right;
+        }
+        .ctrl{
+            margin: 3px 0;
+        }
+
+        .validator{
+            width: 600px;
+            display: inline-block;
+            vertical-align: top;
+        }
+        .title{
+            font-size: 18px;
+        }
+        .course{
+            padding-top: 3px;
+            position: relative;
+        }
+        .removeCourse{
+            position: absolute;
+            top: 0;
+            right: 0;
+        }
+        .note {
+            margin-top: 30px;
+            color: #c00218;
+        }
+        .code{
+            margin: 5px;
+            padding: 3px;
+            font-family: Monaco, DejaVu Sans Mono, Bitstream Vera Sans Mono, Consolas, Courier New, monospace;
+            background: #fafafa;
+            color: #000000;
+        }
+        
+        .j-error{
+            border: 1px solid red;
+            height: 18px;
+            width: 150px;
+        }
+        .j-error-msg{
+            color: #ff0000;
+        }
+
+        .hobby input{
+            display: none;
+        }
+        .hobby input+i:after{
+            content: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="-10 -18 100 135"><circle cx="50" cy="50" r="50" fill="none" stroke="#a9a9a9" stroke-width="3"/></svg>')
+        }
+        .hobby input:checked+i:after{
+            content: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="-10 -18 100 135"><circle cx="50" cy="50" r="50" fill="none" stroke="#a9a9a9" stroke-width="3"/><path fill="#5dc2af" d="M72 25L42 71 27 56l-4 4 20 20 34-52z"/></svg>')
+        }
+        .wrap.j-error-wrap{
+            border: 1px solid red;
+        }
+        .wrap{
+            border: 1px solid #afafaf;
+            height: 21px;
+            width: 150px;
+            display: inline-block;
+        }
+        .wrap input {
+            border: none;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="root validator" id="validator1">
+        <div class="title">基本使用方法</div>
+        <div class="ctrl"><span class="label">必须项</span><input type="text" rule="required"></div>
+        <div class="ctrl"><span class="label">邮箱</span><input type="text" rule="email"></div>
+        <div class="ctrl"><span class="label">数字</span><input type="text" rule="number"></div>
+        <div class="ctrl"><span class="label">整数</span><input type="text" rule="int"></div>
+        <div class="ctrl"><span class="label">小数</span><input type="text" rule="float"></div>
+        <div class="ctrl"><span class="label">邮编</span><input type="text" rule="zipCode"></div>
+        <div class="ctrl"><span class="label">最大10</span><input type="text" rule="max|10"></div>
+        <div class="ctrl"><span class="label">最小5</span><input type="text" rule="min|5"></div>
+        <div class="ctrl"><span class="label">长度最长9</span><input type="text" rule="maxLength|9"></div>
+        <div class="ctrl"><span class="label">长度最短4</span><input type="text" rule="minLength|4"></div>
+        <div class="ctrl"><span class="label">长度为6</span><input type="text" rule="length|6"></div>
+        <div class="ctrl"><span class="label">手机</span><input type="text" rule="mobile"></div>
+        <div class="ctrl"><span class="label">身份证</span><input type="text" id="idCard" rule="idCard"></div>
+        <div class="ctrl"><span class="label">和身份证一样</span><input type="text" rule="sameTo|#idCard"></div>
+        <div class="ctrl"><span class="label">正则表达式</span><input type="text" rule="pattern|^eu\d{3}$,i"></div>
+        <div class="ctrl"><span class="label"></span><input id="submitValidator1" type="button" value="提交"></div>
+    </div>
+    <div class="root validator" id="validator2">
+        <div class="title">不可见输入域-1</div>
+        <div class="subject">
+            <div class="ctrl">
+                <span class="label">选修课程</span>
+                <span>
+                    <select class="switch">
+                        <option value="open">开设</option>
+                        <option value="close">不开设</option>
+                    </select>
+                </span>
+                <input type="button" class="addCourse" value="增加选修课程">
+            </div>
+            <div class="courseContainer">
+                <div class="course">
+                    <div class="ctrl"><span class="label">课程名</span><input type="text" rule="required"></div>
+                    <div class="ctrl"><span class="label">学分</span><input type="text" rule="int|true"></div>
+                    <div class="ctrl"><span class="label">registerRule</span><input type="text" rule="myRule|lee*:|哈哈:"></div>
+                    <div class="ctrl"><span class="label">registerRule</span><input type="text" rule="myRule|mot*:|哼哼:"></div>
+                    <input type="button" class="removeCourse" value="删除课程">
+                </div>
+            </div>
+            
+        </div>
+        <div class="ctrl"><span class="label"></span><input id="submitValidator2" type="button" value="提交"></div>
+
+        <div class="note">
+            以上课程开设时对输入域是要验证的，而不开设后隐藏了输入域，不再需要验证。原本可以使用
+            <p class="code">jvalidator2.ignoreInvisibleFields()</p>
+            完成功能，而不需要在隐藏/显示的时候分别调用ignoreFields/trackFields两个方法<br>
+            但是如果在下面的表单中，却不能调用ignoreInvisibleFields
+        </div>
+    </div>
+
+    <div class="root validator" id="validator3">
+        <div class="title">不可见输入域-2</div>
+        <div class="ctrl hobby">
+            <span class="label">兴趣爱好</span>
+            <label><input type="checkbox" name="hobby" rule="maxLength|3 minLength|1 ::.hobby,"><i></i>乒乓球</label>
+            <label><input type="checkbox" name="hobby" rule="maxLength|3 minLength|1 ::.hobby,"><i></i>篮球</label>
+            <label><input type="checkbox" name="hobby" rule="maxLength|3 minLength|1 ::.hobby,"><i></i>台球</label>
+            <label><input type="checkbox" name="hobby" rule="maxLength|3 minLength|1 :选择1到3个:.hobby,"><i></i>羽毛球</label>
+        </div>
+        <div class="ctrl"><span class="label"></span><input id="submitValidator3" type="button" value="提交"></div>
+        <div class="note">
+            这里如果也存在像上个表单那样显示/隐藏的输入域，就不能用ignoreInvisibleFields，因为此存在隐藏的复选框，需要验证，不能使用ignoreInvisibleFields来忽略所有不可见元素<br>
+            通过羽毛球触发的验证，消息是自定义的
+        </div>
+    </div>
+
+    <div class="root validator" id="validator4">
+        <div class="title">一些其他方法</div>
+        <div class="ctrl"><span class="label">必须项</span><span class="wrap"><input type="text" rule="required"></span></div>
+        <div class="ctrl"><span class="label">邮箱</span><span class="wrap"><input type="text" rule="email"></span></div>
+        <div class="ctrl"><span class="label">小数</span><span class="wrap"><input type="text" rule="float|*::.validator,.common-message"></span></div>
+        <div class="ctrl"><span class="label">邮编</span><span class="wrap"><input type="text" rule="zipCode|*::.validator,.common-message"></span></div>
+        <div class="ctrl"><span class="label">addRule</span><span class="wrap"><input type="text" id="addRule"></span></div>
+        <div class="common-message"></div>
+        <div class="ctrl"><span class="label"></span><input id="submitValidator4" type="button" value="提交"></div>
+        <div class="note">
+            小数和邮编的消息位置是自定义的
+        </div>
+    </div>
+
+    <div class="root validator" id="validator4">
+        <div class="title">还有一些其他方法</div>
+        
+        <div class="note">
+            validator.addRules  为validator下的某个或多个输入域添加一个验证规则，不会影响其他validator，参数是一个数组 <br>
+            JValidator.registerRule  注册一个新的rule，完成后每个validator都可以通过rule="rulename"的方式添加验证 <br>
+            addRules和registerRule中做验证的方法中可以通过this.value()方法取到输入域的值，通过this.param拿到参数数组
+        </div>
+    </div>
+
+    <script type="text/javascript" src="jquery-2.1.1.js"></script>
+    <script type="text/javascript" src="JValidator.js"></script>
+    <script type="text/javascript">
+        var jvalidator1 = new JValidator();
+        jvalidator1.scan('#validator1');
+        $('#submitValidator1').on('click', jvalidator1.wrapSubmit(function () {
+            //通过wrapSubmit包装，只有在validator验证通过的时候，才会调用被包装的函数
+            alert('全部通过验证');
+        }));
+    </script>
+    <script type="text/javascript">
+        //采用new JValidator(options)的方法生成validator,options支持的key有root,msgDom,messages,beforeShowError,beforeHideError,findMsgDom,msgDomTemplate
+        var jvalidator2 = new JValidator({
+            root: '#validator2'
+        });
+        var course =$('.course').prop('outerHTML');
+        $('.addCourse').on('click', function () {
+            var courseAdd = $(course);
+            jvalidator2.scan(courseAdd);
+            $('.courseContainer').append(courseAdd);
+        });
+        $('.subject').on('click', '.removeCourse', function () {
+            var $course = $(this).closest('.course');
+            jvalidator2.remove($course);
+            $course.remove();
+        });
+        $('.switch').on('change', function () {
+            var $this = $(this), value = $this.val();
+            if (value === 'open') {
+                $('.courseContainer').show();
+                jvalidator2.trackFields($('.courseContainer'));
+            } else {
+                $('.courseContainer').hide();
+                jvalidator2.ignoreFields($('.courseContainer'));
+            }
+        });
+        $('#submitValidator2').on('click', jvalidator2.wrapSubmit(function () {
+            alert('全部通过验证');
+        }));
+
+        //通过registerRule注册新验证规则
+        JValidator.registerRule('myRule', function () {
+            return this.value() == this.param[0];
+        }, '这是占位符{0},只能填入{1}');
+    </script>
+    <script type="text/javascript">
+        var jvalidator3 = new JValidator();
+        jvalidator3.scan('#validator3');
+        $('#submitValidator3').on('click', jvalidator3.wrapSubmit(function () {
+            alert('全部通过验证');
+        }));
+    </script>
+    <script type="text/javascript">
+        var jvalidator4 = new JValidator();
+        //自定义一个寻找寻找寻找错误消息显示位置的方法，必须要在scan方法之前调用
+        jvalidator4.findMsgDom = function (input) {
+            var msgDom = $('<span class="j-error-msg" style="display:none"><i class="j-error-icon iconV2 errorIcon"></i><span class="error-content"></span></span>')
+            $(input).closest('.ctrl').append(msgDom);
+            return msgDom;
+        };
+        //设置jvalidator4的默认消息，不会影响其它validator
+        jvalidator4.setMessage({
+            required: '这项是必填项'
+        });
+        //设置JValidator的默认消息，所有validator都会受影响
+        JValidator.setDefaultMessage({
+            email: '请填入一个合法的邮箱地址'
+        });
+        jvalidator4.scan('#validator4');
+        jvalidator4.beforeShowError = function (input) {
+            //显示错误消息的时候执行的回调函数，完成自定义的一些操作
+            $(input).closest('.wrap').addClass('j-error-wrap');
+        };
+        jvalidator4.beforeHideError = function (input) {
+            //隐藏错误消息的时候执行的回调函数，完成自定义的一些操作
+            $(input).closest('.wrap').removeClass('j-error-wrap');
+        };
+        jvalidator4.addRules([
+            {
+                //这是第一个，数组每个元素是一个rule
+                element: '#addRule',
+                name: 'addRuleName',
+                eventType: 'submit',
+                param: [12, 34],
+                msg: '第一占位符{0}和第二占位符{1}和第三占位符{2}',
+                msgPlace: [56],
+                msgDom: ['.validator','.common-message'],
+                method: function () {
+                    var value = this.value();
+                    return value > 20;
+                }
+            }
+        ]);
+        $('#submitValidator4').on('click', jvalidator4.wrapSubmit(function () {
+            alert('全部通过验证');
+        }));
+    </script>
+</body>
+</html>
