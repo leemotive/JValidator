@@ -11,7 +11,7 @@
     function isType (type) {
         return function (obj) {
             return Object.prototype.toString.call(obj) === '[object ' + type + ']';
-        }
+        };
     }
 
     var isFunction = isType('Function');
@@ -152,7 +152,7 @@
             }
 
             $.each(this.fields, function (i, field) {
-                var valid = field.validate()
+                var valid = field.validate();
                 if (valid === false) {
                     firstFailed || (firstFailed = field.element);
                     allPass = false;
@@ -167,7 +167,7 @@
             if (firstFailed) {
                 $(document).scrollTop($(firstFailed).offset().top - 20);
             }
-            return allPass
+            return allPass;
         };
         this.addRules = function (rules) {
             var _this, newField, $element, ruleName, param, eventType, msg, msgPlace, msgDom, method;
@@ -183,7 +183,7 @@
                     _this.fields.push(newField);
                 } else {
                     $.each(_this.fields, function (i, field) {
-                        if (field.element[0] == element) {
+                        if (field.element[0] == ruleOp.element) {
                             newField = field;
                             return false;
                         }
@@ -217,7 +217,7 @@
                     return func();
                 }
                 
-            }
+            };
 
             function isAllTrue (res) {
                 var allTrue = true;
@@ -251,7 +251,7 @@
         };
         this.ignoreFields = function (selector) {
             var $container = $(selector);
-            if ($container.attr('rule') != undefined) {
+            if ($container.attr('rule') != null) {
                 $container.data('jField').ignore();
             } else {
                 $container.find('[rule]').each(function (i, element) {
@@ -261,7 +261,7 @@
         };
         this.trackFields = function (selector) {
             var $container = $(selector);
-            if ($container.attr('rule') != undefined) {
+            if ($container.attr('rule') != null) {
                 $container.data('jField').track();
             } else {
                 $container.find('[rule]').each(function (i, element) {
