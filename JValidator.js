@@ -6,7 +6,7 @@
     } else {
         this.JValidator = factory(jQuery);
     }
-}).call(typeof window !== "undefined" ? window : this, function ($) {
+}).call(typeof window !== "undefined" ? window : this, function ($, undefined) {
 
     function isType (type) {
         return function (obj) {
@@ -19,6 +19,15 @@
     var isObject = isType('Object');
     var isArray = Array.isArray || isType('Array');
     var slice = Array.prototype.slice;
+    var indexOf = Array.prototype.indexOf || function (str) {
+            var index = this.length;
+            while (index--) {
+                if (this[index] === str) {
+                    return index;
+                }
+            }
+            return index;
+        }
 
     var JValidatorStatus = {
         ENABLE: 1,
@@ -35,106 +44,169 @@
         'min': '请填写大于或者等于{0}的数',
         'maxLength': '输入字符长度不得大于{0}',
         'minLength': '输入字符长度不得小于{0}',
+        'selectMaxLength': '最多选择{0}个',
+        'selectMinLength': '至少选择{0}个',
         'mobile': '请输入11位数有效手机号码',
         'idCard': '请输入有效的身份证号码',
         'length': '输入字符长度须等于{0}',
+        'selectLength': '只能选择{0}个',
         'required': '不能为空',
-        'sameTo': '两次输入不致'
+        'sameTo': '两次输入不一致',
+        'default': '请正确输入'
     };
-    var msgDomTemplate = '<span class="j-error-msg" style="display:none"><i class="j-error-icon iconV2 errorIcon"></i><span class="error-content"></span></span>';
+    var msgDomTemplate = '<span class="j-error-msg" style="display:none"><i class="j-error-icon"></i><span class="j-error-content"></span></span>';
 
     function JValidator (options) {
-        options = options || {};
-        options.root && (this.root = $(options.root));
         this.fields = [];
         this.status = JValidatorStatus.ENABLE;
+        this.validateInvisibleFields = true;
+
+        options = options || {};
+        options.root && (this.root = $(options.root)[0]);
         options.msgDom && (this.msgDom = options.msgDom);
         $.extend(this.msgNameSpace = {}, options.messages);
-        this.validateInvisibleFileds = true;
         options.beforeShowError && (this.beforeShowError = options.beforeShowError);
         options.beforeHideError && (this.beforeHideError = options.beforeHideError);
         options.findMsgDom && (this.findMsgDom = options.findMsgDom);
         options.msgDomTemplate && (this.msgDomTemplate = options.msgDomTemplate);
 
-        this.root && this.scan(this.root);
+        this.root && this.scan(this.root, true);
     }
 
+    var ruleCache = {
+        values: {},
+        get: function (key) {
+            return key && this.values[key];
+        },
+        set: function (key, rule) {
+            this.values[key] = rule;
+        }
+    };
+
+    function parseRule (rule) {
+        //rule属性的完整写法 name|param*event:msg|msgPlace:msgDomParent,msgDom
+        var name, param, eventType, msg, msgPlace, msgDom;
+        var resultRule, ruleCopy;
+        if (resultRule = ruleCache.get(rule)) {
+            return resultRule;
+        }
+        ruleCopy = rule.replace(/^(\w+)(\||$)/, function (str, sub) {
+            name = sub;
+            return '';
+        });
+
+        // 直接解析到事件名的正则，参数中也可以带*
+        ruleCopy = ruleCopy.replace(/(.*?)(?:\*([a-z]*|:)(?::|$)|$)/, function (str, params, event) {
+            param = params ? params.split(',') : [];
+            eventType = event;
+            return '';
+        });
+        ruleCopy = ruleCopy.split(':');
+        if (ruleCopy[0]) {
+            msg = ruleCopy[0].split('|');
+            msgPlace = msg[1] && msg[1].split(',');
+            msg = msg[0];
+        }
+
+        if (ruleCopy[1]) {
+            msgDom = ruleCopy[1].split(',');
+            msgDom.length === 1 && (msgDom = msgDom[0]);
+        }
+
+        resultRule = {
+            name:name,
+            param:param,
+            eventType:eventType,
+            msg:msg,
+            msgPlace:msgPlace,
+            msgDom:msgDom
+        };
+        ruleCache.set(rule, resultRule);
+        return resultRule;
+    }
 
     (function () {
-        this.scan = function (selector) {
-            var _this, $root;
+        this.ruleAttrName = 'rule';
+        this.scan = function (selector, forceRebuilt) {
+            var _this, $root, ruleAttrName, ruleAttrSelector;
             _this = this;
             $root = $(selector);
-            this.root || (this.root = $root );
-            $root = $root.is('[rule]') ? $root : $root.find('[rule]');
-            $root.each(function(){
-                var $this, ruleStr, field, ruleArray, fieldMsgDom;
-                $this = $(this);
-                field = new Field(_this, $this);
-                ruleStr = $this.attr('rule');
+            ruleAttrName = this.ruleAttrName;
+            ruleAttrSelector = '[' + ruleAttrName + ']';
 
-                ruleArray = ruleStr.split(/\s+/);
-                fieldMsgDom = ruleArray.pop();
-                if (fieldMsgDom.charAt(0) === ':') {
-                    //如果最后一个是以:始,则是定义这个field上的一些共同的东西msg:msgDom
-                    fieldMsgDom = fieldMsgDom.replace(/^:/, '').split(':');
-                    field.msg = fieldMsgDom[0];
-                    field.msgDom = (fieldMsgDom[1] || '').split(',');
-                    field.msgDom.length === 1 && (field.msgDom = field.msgDom[0]);
-                } else {
-                    ruleArray.push(fieldMsgDom);
+            if (!this.root) {
+                this.root = $root[0];
+                $root = $root.eq(0);
+            }
+
+            $root.each(function(){
+                var $this = $(this),
+                    $scanRoot = $this.is(ruleAttrSelector) ? $this : $this.find(ruleAttrSelector);
+
+                if (!_this._isChild($this)) {
+                    return;
                 }
 
-                $.each(ruleArray, function (i, rule) {
-                    //rule属性的完整写法 name|param*event:msg|msgPlace:msgDomParent,msgDom
-                    var name, param, eventType, msg, msgPlace, msgDom;
-                    rule = rule.replace(/^(\w+)(\||$)/, function (str, sub) {
-                        name = sub;
-                        return '';
-                    });
-                    
-                    rule = rule.replace(/([^\*]*)(\*|$)/, function (str, sub) {
-                        param = sub ? sub.split(',') : [];
-                        return '';
-                    });
-                    
-                    rule = rule.split(':');
-                    eventType = rule[0] || 'blur';
+                $scanRoot.each(function () {
+                    var $this, ruleStr, field, ruleArray, fieldMsgDom, index;
+                    $this = $(this);
 
-                    if (rule[1]) {
-                        msg = rule[1].split('|');
-                        msgPlace = msg[1];
-                        msg = msg[0];
-                        if (msgPlace) {
-                            msgPlace = msgPlace.split(',');
-                        }
+                    index = _this._getField($this, true);
+                    if (!forceRebuilt && index > -1) {
+                        return;
                     }
 
-                    if (rule[2]) {
-                        msgDom = rule[2].split(',');
-                        msgDom.length === 1 && (msgDom = msgDom[0]);
+                    if (index > -1) {
+                        _this.remove($this);
                     }
 
-                    rule = new Rule(field, name, param, eventType, msg, msgPlace, msgDom);
-                    field.rules.push(rule);
+                    field = new Field(_this, $this);
+                    ruleStr = $this.attr(ruleAttrName);
+
+                    ruleArray = ruleStr.split(/\s+/);
+                    fieldMsgDom = ruleArray.pop();
+                    if (fieldMsgDom.charAt(0) === ':') {
+                        //如果最后一个是以:始,则是定义这个field上的一些共同的东西msg:msgDom
+                        fieldMsgDom = fieldMsgDom.replace(/^:/, '').split(':');
+                        field.msg = fieldMsgDom[0];
+                        field.msgDom = (fieldMsgDom[1] || '').split(',');
+                        field.msgDom.length === 1 && (field.msgDom = field.msgDom[0]);
+                    } else {
+                        ruleArray.push(fieldMsgDom);
+                    }
+
+                    $.each(ruleArray, function (i, expression) {
+                        field.rules.push(new Rule(field, parseRule(expression)));
+                    });
+
+                    _this.fields.push(field);
                 });
 
-                _this.fields.push(field);
             });
             return this;
         };
         this.remove = function (selector) {
             var _this = this;
-            $(selector).find('[rule]').each(function(){
-                var element = this;
-                $.each(_this.fields, function (i, field) {
-                    if (field.element[0] == element) {
-                        field.destroy();
-                        _this.fields.splice(i, 1);
-                        return false;
-                    }
-                });
+
+            $(selector).each(function (index, field) {
+                var $field = $(field);
+                if ($field.attr(_this.ruleAttrName) === undefined) {
+                    $field.find('[' + _this.ruleAttrName + ']').each(function (i, element) {
+                        execute(element);
+                    });
+                } else {
+                    execute(field);
+                }
             });
+
+            function execute (ele) {
+                var delField, index = _this._getField(ele, true);
+                if (index > -1) {
+                    delField = _this.fields.splice(index, 1);
+                    delField[0] && delField[0].destroy();
+                }
+            }
+
         };
         this.destroy = function () {
             var _this = this;
@@ -143,18 +215,21 @@
             });
             _this.disableValidator();
         };
-        this.validate = function () {
+        this.validate = function (field, ruleName) {
+            if (field) {
+                //只校验某一个输入域
+                return this._getField(field).validate(ruleName);
+            }
             var allPass = true, jqXHRs, firstFailed;
             jqXHRs = [];
 
             if (!this.isEnable()) {
                 return true;
             }
-
             $.each(this.fields, function (i, field) {
                 var valid = field.validate();
                 if (valid === false) {
-                    firstFailed || (firstFailed = field.element);
+                    firstFailed || (firstFailed = field.$element);
                     allPass = false;
                 } else if (isObject(valid)) {
                     jqXHRs.push(valid);
@@ -170,35 +245,30 @@
             return allPass;
         };
         this.addRules = function (rules) {
-            var _this, newField, $element, ruleName, param, eventType, msg, msgPlace, msgDom, method;
+            var _this, newField, $element;
             _this = this;
 
             $.each(rules, function (i, ruleOp) {
-
                 $element = $(ruleOp.element);
 
-                if ($element.attr('rule') === undefined) {
-                    $element.attr('rule', '');
+                if ($element.attr(_this.ruleAttrName) === undefined) {
+                    $element.attr(_this.ruleAttrName, '');
                     newField = new Field(_this, $element);
                     _this.fields.push(newField);
                 } else {
                     $.each(_this.fields, function (i, field) {
-                        if (field.element[0] == ruleOp.element) {
+                        if (field.$element[0] == $element[0]) {
                             newField = field;
                             return false;
                         }
                     });
                 }
+                if (ruleOp.expression) {
+                    ruleOp = $.extend(parseRule(ruleOp.expression), {method: ruleOp.method})
+                }
+                ruleOp.name || (ruleOp.name = nextUid());
 
-                ruleName = ruleOp.name || nextUid();
-                eventType = ruleOp.eventType || 'submit';
-                param = ruleOp.param || [];
-                msg = ruleOp.msg || newField.msg || '';
-                msgPlace = ruleOp.msgPlace || [];
-                msgDom = ruleOp.msgDom || '';
-                method = ruleOp.method;
-
-                newField.rules.push(new Rule(newField, ruleName, param, eventType, msg, msgPlace, msgDom, method));
+                newField.rules.push(new Rule(newField, ruleOp));
             });
         };
         this.wrapSubmit = function (func) {
@@ -216,21 +286,17 @@
                 } else {
                     return func();
                 }
-                
+
             };
 
             function isAllTrue (res) {
                 var allTrue = true;
-                if (isObject(res[1])) {
-                    $.each(res, function (i, v) {
-                        if (v.result === false) {
-                            allTrue = false;
-                            return allTrue;
-                        }
-                    });
-                } else {
-                    allTrue = res[0].result;
-                }
+                $.each(res, function (i, v) {
+                    if (v.result === false) {
+                        allTrue = false;
+                        return allTrue;
+                    }
+                });
                 return allTrue;
             }
         };
@@ -250,33 +316,59 @@
             this.msgDomTemplate = template;
         };
         this.ignoreFields = function (selector) {
-            var $container = $(selector);
-            if ($container.attr('rule') != null) {
-                $container.data('jField').ignore();
-            } else {
-                $container.find('[rule]').each(function (i, element) {
-                    $(element).data('jField').ignore();
-                });
-            }
+            var _this = this;
+            $(selector).each(function (index, field) {
+                var $field = $(field);
+                if ($field.attr(_this.ruleAttrName) === undefined) {
+                    $field.find('[' + _this.ruleAttrName + ']').each(function (i, element) {
+                        _this._getField(element).ignore();
+                    });
+                } else {
+                    _this._getField(field).ignore();
+                }
+            });
         };
         this.trackFields = function (selector) {
-            var $container = $(selector);
-            if ($container.attr('rule') != null) {
-                $container.data('jField').track();
-            } else {
-                $container.find('[rule]').each(function (i, element) {
-                    $(element).data('jField').track();
-                });
-            }
+            var _this = this;
+            $(selector).each(function (index, field) {
+                var $field = $(field);
+                if ($field.attr(_this.ruleAttrName) === undefined) {
+                    $field.find('[' + _this.ruleAttrName + ']').each(function (i, element) {
+                        _this._getField(element).track();
+                    });
+                } else {
+                    _this._getField(field).track();
+                }
+            });
         };
         this.ignoreInvisibleFields = function () {
-            this.validateInvisibleFileds = false;
+            this.validateInvisibleFields = false;
         };
         this.trackInvisibleFields = function () {
-            this.validateInvisibleFileds = true;
+            this.validateInvisibleFields = true;
         };
         this.beforeShowError = function () {};
         this.beforeHideError =function () {};
+        this._getField = function (ele, _returnIndex) {
+            var result = null;
+            $.each(this.fields, function (i, field) {
+                if (field.$element[0] === $(ele)[0]) {
+                    result = _returnIndex ? i : field;
+                    return false;
+                }
+            })
+            return _returnIndex && result === null ? -1 : result;
+        };
+        this._isChild = function (child) {
+            child = $(child)[0];
+            while(child != undefined && child.tagName.toUpperCase() !== "BODY") {
+                if (child === this.root) {
+                    return true;
+                }
+                child = child.parentNode;
+            }
+            return false;
+        }
     }).call(JValidator.prototype);
 
     (function () {
@@ -307,6 +399,10 @@
         this.setMsgDomTemplate = function (template) {
             msgDomTemplate = template;
         };
+        this.ruleAttrName = function (attrName) {
+            //用于设置规则名字设置，校验器默认使用'rule'来标记，可以自定义
+            this.prototype.ruleAttrName = attrName;
+        };
     }).call(JValidator);
 
     function Field (jValidator, element) {
@@ -314,7 +410,7 @@
         this.errors = {
             totalError: 0
         };
-        this.element = element;
+        this.$element = $(element).eq(0);
         this.rules = [];
         this.allPass = undefined;
         this.msgDom = this.jValidator.msgDom;
@@ -322,36 +418,33 @@
 
         var _this, $element;
         _this = this;
-        $element = this.element;
+        $element = this.$element;
         $element.off('focus.JValidatorFocus').on('focus.JValidatorFocus', function () {
             _this.hideError();
         });
-        if ($element.is(':checkbox') || $element.is(':radio')) {
-            $element.off('click.JValidatorClick').on('click.JValidatorClick', function () {
-                _this.hideError();
-            });
-        }
 
-        $(this.element).data('jField', this);
     }
 
     (function () {
-        this.validate = function () {
+        this.validate = function (ruleName) {
             var pass, _this = this;
             _this.allPass = true;
 
-            if (!_this.isValidatorEnable()) {
+            if (!this.needValidate()) {
                 return true;
             }
 
+            if (ruleName && !isArray(ruleName)) {
+                ruleName = [ruleName]
+            }
             $.each(_this.rules, function (i, rule) {
-                pass = rule.validate();
+                if (!ruleName || ~indexOf.call(ruleName, rule.name)) {
+                    pass = rule.validate(true);
 
-                if (pass !== true) {
-                    _this.allPass = pass;
-                    _this.handleValidateResult(rule);
-                    if (pass === false) {
-                        return false;
+                    if (pass !== true) {
+                        _this.allPass = pass;
+                        _this.handleValidateResult(rule);
+                        return pass !== false;
                     }
                 }
             });
@@ -359,10 +452,10 @@
             return _this.allPass;
         };
         this.value = function () {
-            return this.element.val();
+            return this.$element.val();
         };
         this.text = function () {
-            return this.element.text();
+            return this.$element.text();
         };
         this.ignore = function () {
             this.status = JValidatorStatus.DISABLE;
@@ -370,51 +463,49 @@
         this.track = function () {
             this.status = JValidatorStatus.ENABLE;
         };
-        this.isIgnored = function () {
-            return this.status === JValidatorStatus.DISABLE;
+        this.needValidate = function () {
+            return this.status !== JValidatorStatus.DISABLE && this.isValidatorEnable() && (this.jValidator.validateInvisibleFields || this.$element.is(':visible'));
         };
-        this.handleValidateResult = function (rule, msg) {
-            var $element, pass, ruleName, errors;
-            $element = this.element;
+        this.handleValidateResult = function (rule) {
+            var pass, ruleName, errors;
             pass = rule.pass;
             ruleName = rule.name;
             errors = this.errors;
             if (pass === true) {
-                //$element.removeClass('j-error-' + ruleName);
                 if (errors[ruleName]) {
                     errors.totalError--;
                 }
                 delete errors[ruleName];
                 if (errors.totalError === 0) {
                     this.lock = false;
-                    this.hideError(rule);
+                    this.hideError();
                 }
             } else if (pass === false){
-                //$element.addClass('j-error-' + ruleName);
                 if (!errors[ruleName]) {
                     errors[ruleName] = true;
                     errors.totalError++;
                 }
                 if (!this.lock) {
                     this.lock = true;
-                    this.showError(rule, msg);
+                    this.showError(rule);
                 }
             }
         };
         this.isValidatorEnable = function () {
             return this.jValidator.isEnable();
         };
-        this.showError = function (rule, msg) {
-            var $msgDom, errorContent, message, ruleName;
+        this.showError = function (rule) {
+            var $msgDom, $errorContent, message, msgName;
             $msgDom = $(rule.msgDom);
-            ruleName = rule.name;
-            
-            errorContent = $msgDom.find('.error-content');
-            if (!errorContent.length) {
-                errorContent = $msgDom;
+            msgName = rule.msgName || rule.name;
+
+
+            $errorContent = $msgDom.find('.error-content');
+            if (!$errorContent.length) {
+                $errorContent = $msgDom;
             }
 
-            message = msg || rule.msg || this.jValidator.msgNameSpace[ruleName] || msgNamespace[ruleName] || '请正确输入';
+            message = rule.msg || this.jValidator.msgNameSpace[msgName] || msgNamespace[msgName] || msgNamespace.default;
             message = message.replace(/\{([\d+|n])\}/g, function (str, sub) {
                 if ('n' === sub) {
                     return rule.msgPlace.join(',');
@@ -422,18 +513,18 @@
                     return rule.msgPlace[sub] || '';
                 }
             });
-            errorContent.text(message);
-            this.jValidator.beforeShowError(this.element[0]);
-            this.element.addClass('j-error');
+            $errorContent.text(message);
+            this.jValidator.beforeShowError(this.$element[0]);
+            this.$element.addClass('j-error');
             $msgDom.show();
         };
-        this.hideError = function (rule) {
-            this.jValidator.beforeHideError(this.element[0]);
+        this.hideError = function () {
+            this.jValidator.beforeHideError(this.$element[0]);
             this.errors = {
                 totalError: 0
             };
             this.lock = false;
-            this.element.removeClass('j-error');
+            this.$element.removeClass('j-error');
             this.rules.forEach(function (rule) {
                 $(rule.msgDom).hide();
             });
@@ -443,7 +534,7 @@
         };
         this.isCheckbox = function (returnName) {
             var name, $element;
-            $element = $(this.element);
+            $element = this.$element;
             name = $element.is(':checkbox');
             if (name && returnName) {
                 name = $element.attr('name');
@@ -452,7 +543,7 @@
         };
         this.isRadio = function (returnName) {
             var name, $element;
-            $element = $(this.element);
+            $element = this.$element;
             name = $element.is(':radio');
             if (name && returnName) {
                 name = $element.attr('name');
@@ -460,30 +551,36 @@
             return name;
         };
         this.destroy = function () {
-            $(this.element).off('.JValidator');
-            delete this.element;
+            this.$element.off('.JValidator');
+            delete this.$element;
         };
     }).call(Field.prototype);
 
-    function Rule (field, name, param, eventType, msg, msgPlace, msgDom, method) {
+    function Rule (field, options) {
         var _this = this, _msgDom;
 
         this.field = field;
-        this.name = name;
-        this.param = param || [];
-        this.eventType = eventType || 'blur';
-        this.msg = msg || this.field.msg;
-        this.msgPlace = (msgPlace || []).concat(this.param);
-        this.method = method;
+        this.name = options.name;
+        this.param = options.param || [];
+        this.eventType = options.eventType || 'blur';
+        this.msg = options.msg || this.field.msg;
+        this.msgPlace = (options.msgPlace || []).concat(this.param);
+        this.method = options.method;
+
+        if ((this.name === 'length' || this.name === 'minLength' || this.name === 'maxLength') && this.field.isCheckbox()) {
+            this.msgName = 'select' + capitalizeFirstLetter(this.name);
+        }
 
         var $element, msgDomParent;
-        $element = this.field.element;
-        _msgDom = msgDom || this.field.msgDom || this.field.jValidator.msgDom || ['^', '.j-error-msg'];
+        $element = this.field.$element;
+        _msgDom = options.msgDom || this.field.msgDom || this.field.jValidator.msgDom || ['^', '.j-error-msg'];
         if (isArray(_msgDom)) {
             if (_msgDom[0] === '^') {
                 msgDomParent = $element.parent();
+            } else if (_msgDom[0].charAt(0) === '^'){
+                msgDomParent = $element.closest(_msgDom[0].substring(1));
             } else {
-                msgDomParent = $element.closest(_msgDom[0]);
+                msgDomParent = $(_msgDom[0]);
             }
             if (_msgDom[1]){
                 _msgDom = msgDomParent.find(_msgDom[1]);
@@ -503,16 +600,16 @@
         }
         this.msgDom = _msgDom;
         if (this.msgDom.is('label')) {
-            var elementId = this.field.element.attr('id');
+            var elementId = this.field.$element.attr('id');
             if (!elementId) {
                 elementId = nextUid();
-                this.field.element.attr('id', elementId);
+                this.field.$element.attr('id', elementId);
             }
             this.msgDom.attr('for', elementId);
         }
 
         this.pass = undefined;
-        this.xhr = null;
+        this.isRemote = null;
         if (this.eventType != 'submit') {
             if ($element.is('select')){
                 this.eventType = 'change blur';
@@ -526,17 +623,19 @@
     }
 
     (function () {
-        this.validate = function () {
-            var _this, originPass;
+        this.validate = function (isSubmit) {
+            var _this;
+            _this = this;
 
-            if (this.isFieldIgnored() || !this.isValidatorEnable() || (!this.field.jValidator.validateInvisibleFileds && !this.isFieldVisible())) {
+            if (!this.isFieldNeedValidate()) {
                 return true;
             }
+            if (isSubmit && _this.eventType !== 'submit' && _this.isRemote) {
+                return _this.pass;
+            }
 
-            _this = this;
-            originPass = _this.pass;
-            if (originPass && isObject(originPass)){
-                originPass.abort();
+            if (_this.pass && isObject(_this.pass)){
+                _this.pass.abort();
             }
             if (isFunction(_this.method)) {
                 _this.pass = _this.method();
@@ -545,9 +644,11 @@
             }
 
             if (!isBoolean(_this.pass)) {
+                _this.isRemote = true;
                 _this.pass.done(function (data, textStatus, jqXHR) {
                     _this.pass = data.result;
-                    _this.field.handleValidateResult(_this, data.msg);
+                    _this.msg = data.message;
+                    _this.field.handleValidateResult(_this);
                 });
             }
 
@@ -560,17 +661,14 @@
         this.text = function () {
             return this.field.text();
         };
-        this.isFieldIgnored = function () {
-            return this.field.isIgnored();
+        this.isFieldNeedValidate = function () {
+            return this.field.needValidate();
         };
         this.isValidatorEnable = function () {
             return this.field.jValidator.isEnable();
         };
         this.root = function () {
-            return this.field.root();
-        };
-        this.isFieldVisible = function () {
-            return this.field.element.is(':visible');
+            return $(this.field.root());
         };
     }).call(Rule.prototype);
 
@@ -638,7 +736,6 @@
             if (name) {
                 value = this.root().find('[name=' + name+']:checked').length;
                 value && (valid = value <= this.param[0]);
-                this.msg || (this.msg = '最多选择{0}个');
             } else {
                 value = String(this.value());
                 value && (valid = value.length <= this.param[0]);
@@ -652,7 +749,6 @@
             if (name) {
                 value = this.root().find('[name=' + name + ']:checked').length;
                 valid = value >= this.param[0];
-                this.msg || (this.msg = '至少选择{0}个');
             } else {
                 value = String(this.value());
                 value && (valid = value.length >= this.param[0]);
@@ -701,7 +797,6 @@
             if (name) {
                 value = this.root().find('[name=' + name + ']:checked').length;
                 value && (valid = value == this.param[0]);
-                this.msg || (this.msg = '只能选择{0}个');
             } else {
                 value = String(this.value());
                 value && (valid = value.length == this.param[0]);
@@ -727,42 +822,50 @@
                 valid = value == $(this.param[0]).val();
             }
             return valid;
+        },
+        remote: function () {
+            var value;
+            value = this.value;
+            return $.ajax({
+                url: this.param[0],
+                dataType: this.param[1] || 'json'
+            })
         }
     };
 
     var nextUid = (function () {
-            var uid = ['0', '0', '0'],
-                next,
-                prefix = 'jRuleName';
+        var uid = ['0', '0', '0'],
+            next,
+            prefix = 'jRuleName';
 
-            next = function () {
-                var index = uid.length;
-                var digit;
+        next = function () {
+            var index = uid.length;
+            var digit;
 
-                while(index) {
-                    index--;
-                    digit = uid[index].charCodeAt(0);
-                    if (digit == 57 /*'9'*/) {
-                        uid[index] = 'a';
-                        return prefix + uid.join('');
-                    }
-                    if (digit == 122  /*'z'*/) {
-                        uid[index] = 'A';
-                        return prefix + uid.join('');
-                    } 
-
-                    if (digit == 90) {
-                        uid[index] = '0';
-                    } else {
-                        uid[index] = String.fromCharCode(digit + 1);
-                        return prefix + uid.join('');
-                    }
+            while(index) {
+                index--;
+                digit = uid[index].charCodeAt(0);
+                if (digit == 57 /*'9'*/) {
+                    uid[index] = 'a';
+                    return prefix + uid.join('');
                 }
-                uid.unshift('0');
-                return prefix + uid.join('');
-            };
-            return next;
-        }());
+                if (digit == 122  /*'z'*/) {
+                    uid[index] = 'A';
+                    return prefix + uid.join('');
+                }
+
+                if (digit == 90) {
+                    uid[index] = '0';
+                } else {
+                    uid[index] = String.fromCharCode(digit + 1);
+                    return prefix + uid.join('');
+                }
+            }
+            uid.unshift('0');
+            return prefix + uid.join('');
+        };
+        return next;
+    }());
 
     function isLeapYear(year) {
         return year % 4 === 0 && year % 100 !== 0 || year % 400 === 0;
@@ -774,6 +877,24 @@
         }
         return Math.ceil(Math.abs(month - 7.5)) % 2 + 30;
     }
+
+    function capitalizeFirstLetter (str) {
+        return str && (str.substring(0,1).toUpperCase() + str.substring(1));
+    }
+
+    $(function () {
+        $('[j-validate]').each(function () {
+            var root = this, $this = $(this), validator;
+            validator = new JValidator({root: root});
+            $this.data('jValidator', validator);
+            if ($this.is('form')) {
+                $this.on('submit', function () {
+                    return validator.validate();
+                });
+            }
+        })
+    })
+
 
     return JValidator;
 });
