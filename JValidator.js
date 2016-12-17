@@ -138,6 +138,7 @@
                 this.root = $root[0];
                 $root = $root.eq(0);
             }
+            $(this.root).addClass('j-validator-root');
 
             $root.each(function(){
                 var $this = $(this),
@@ -240,6 +241,9 @@
                 allPass = $.when.apply($, jqXHRs);
             }
             if (firstFailed) {
+                if ($(firstFailed).is(':hidden')) {
+                    firstFailed = $(firstFailed).closest(':visible');
+                }
                 $(document).scrollTop($(firstFailed).offset().top - 20);
             }
             return allPass;
@@ -274,17 +278,18 @@
         this.wrapSubmit = function (func) {
             var _this = this;
             return function () {
+                var dom = this;
                 var valid = _this.validate();
                 if (!valid) {
                     return valid;
                 } else if (isObject(valid)) {
                     return valid.done(function () {
                         if (isAllTrue(slice.call(arguments))){
-                            func();
+                            func.call(dom);
                         }
                     });
                 } else {
-                    return func();
+                    return func.call(dom);
                 }
 
             };
@@ -505,7 +510,7 @@
                 $errorContent = $msgDom;
             }
 
-            message = rule.msg || this.jValidator.msgNameSpace[msgName] || msgNamespace[msgName] || msgNamespace.default;
+            message = rule.msg || this.jValidator.msgNameSpace[msgName] || msgNamespace[msgName] || msgNamespace['default'];
             message = message.replace(/\{([\d+|n])\}/g, function (str, sub) {
                 if ('n' === sub) {
                     return rule.msgPlace.join(',');
@@ -525,7 +530,7 @@
             };
             this.lock = false;
             this.$element.removeClass('j-error');
-            this.rules.forEach(function (rule) {
+            $.each(this.rules, function (i, rule) {
                 $(rule.msgDom).hide();
             });
         };
@@ -647,7 +652,7 @@
                 _this.isRemote = true;
                 _this.pass.done(function (data, textStatus, jqXHR) {
                     _this.pass = data.result;
-                    _this.msg = data.message;
+                    _this.msg = data.message || _this.msg;
                     _this.field.handleValidateResult(_this);
                 });
             }
@@ -824,12 +829,13 @@
             return valid;
         },
         remote: function () {
-            var value;
-            value = this.value;
             return $.ajax({
                 url: this.param[0],
+                data: {
+                    value: this.value()
+                },
                 dataType: this.param[1] || 'json'
-            })
+            });
         }
     };
 
